@@ -1,0 +1,164 @@
+zabbix_export:
+  date: '2023-10-23T14:13:18Z'
+  groups:
+    -
+      uuid: 7df96b18c230490a9a0a9e2307226338
+      name: Templates
+  templates:
+    -
+      uuid: 1fd871d9c0b94aad86a706c7a4ac4596
+      template: Prefect
+      name: Prefect
+      groups:
+        -
+          name: Templates
+      items:
+        -
+          uuid: 05f3235ef01842468c1641c8be35398a
+          name: 'Prefect flows API call'
+          type: HTTP_AGENT
+          key: prefect_request
+          delay: 2m
+          trends: '0'
+          value_type: TEXT
+          allowed_hosts: 0.0.0.0/0
+          preprocessing:
+            -
+              type: JSONPATH
+              parameters:
+                - $.body
+          url: '{$PREFECT_URL}/api/flows/filter'
+          posts: '{}'
+          post_type: JSON
+          request_method: POST
+          output_format: JSON
+          tags:
+            -
+              tag: prefect
+              value: 'true'
+          triggers:
+            -
+              uuid: 1f10d5b2e81446ca96155c6c5c1d19d7
+              expression: 'nodata(/Prefect/prefect_request,1d)=1'
+              name: 'Prefect call not returning data'
+              priority: AVERAGE
+              tags:
+                -
+                  tag: prefect
+                  value: 'true'
+      discovery_rules:
+        -
+          uuid: c77424c9f3ad4dd68399cb178e54a845
+          name: 'Prefect data discovery'
+          type: DEPENDENT
+          key: prefect_receiver_discovery
+          delay: '0'
+          lifetime: 1d
+          item_prototypes:
+            -
+              uuid: c48758d335da412bb7c2da5a2e71cfc2
+              name: 'Prefect ''{#NAME}'' last run data'
+              type: HTTP_AGENT
+              key: 'last_run_data[{#ID}]'
+              history: 3d
+              trends: '0'
+              value_type: TEXT
+              preprocessing:
+                -
+                  type: JSONPATH
+                  parameters:
+                    - $.body.first()
+              url: '{$PREFECT_URL}/api/flow_runs/filter'
+              posts: |
+                {
+                        "sort": "START_TIME_DESC",
+                        "flows": {
+                            "operator": "and_",
+                            "id": {
+                                "any_": [
+                                    "{#ID}"
+                                ]
+                            }
+                        },
+                        "limit": 1
+                    }
+              headers:
+                -
+                  name: Content-Type
+                  value: application/json
+              request_method: POST
+              output_format: JSON
+              tags:
+                -
+                  tag: prefect
+                  value: 'true'
+            -
+              uuid: 22b3fb3f1e7f464a9412b88888f33120
+              name: 'Prefect ''{#NAME}'' last run status'
+              type: DEPENDENT
+              key: 'last_run_status[{#ID}]'
+              delay: '0'
+              history: 3d
+              trends: '0'
+              value_type: TEXT
+              preprocessing:
+                -
+                  type: JSONPATH
+                  parameters:
+                    - $.state_type
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: UNKNOWN
+              master_item:
+                key: 'last_run_data[{#ID}]'
+              tags:
+                -
+                  tag: prefect
+                  value: 'true'
+              trigger_prototypes:
+                -
+                  uuid: 266fa0d39d254aabadb410806e30be86
+                  expression: 'last(/Prefect/last_run_status[{#ID}])="FAILED"'
+                  recovery_mode: RECOVERY_EXPRESSION
+                  recovery_expression: 'last(/Prefect/last_run_status[{#ID}])="COMPLETED"'
+                  name: 'Prefect flow ''{#NAME}'' failed'
+                  url: '{$PREFECT_URL}/flows/flow/{#ID}'
+                  priority: AVERAGE
+                  description: '{$PREFECT_URL}/flows/flow/{#ID}'
+                  tags:
+                    -
+                      tag: prefect
+                      value: 'true'
+                -
+                  uuid: e6b09aab8eb840bfb0a3e83f741e59fb
+                  expression: 'last(/Prefect/last_run_status[{#ID}])="NOTFOUND"'
+                  name: 'Prefect flow ''{#NAME}'' not found'
+                  url: '{$PREFECT_URL}/flows/flow/{#ID}'
+                  priority: WARNING
+                  description: '{$PREFECT_URL}/flows/flow/{#ID}'
+                  tags:
+                    -
+                      tag: prefect
+                      value: 'true'
+          master_item:
+            key: prefect_request
+          lld_macro_paths:
+            -
+              lld_macro: '{#DATE}'
+              path: $.updated
+            -
+              lld_macro: '{#ID}'
+              path: $.id
+            -
+              lld_macro: '{#NAME}'
+              path: $.name
+            -
+              lld_macro: '{#STATUS}'
+              path: $.state_type
+      tags:
+        -
+          tag: prefect
+          value: 'True'
+      macros:
+        -
+          macro: '{$PREFECT_URL}'
+          value: 'http://10.20.19.193'
